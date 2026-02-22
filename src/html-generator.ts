@@ -38,6 +38,8 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
 (function() {
   const container = document.getElementById('${id}');
   const data = ${data};
+  if (!data.length) return;
+  const f = resolveFields(data, '${x}', '${y}');
   const margin = {top: 20, right: 20, bottom: 40, left: ${horizontal ? 100 : 50}};
   const width = container.clientWidth - margin.left - margin.right;
   const height = 260 - margin.top - margin.bottom;
@@ -48,8 +50,8 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
     .attr("preserveAspectRatio", "xMidYMid meet")
     .append("g").attr("transform", \`translate(\${margin.left},\${margin.top})\`);
 
-  const labels = data.map(d => String(d['${x}'] ?? ''));
-  const values = data.map(d => Number(d['${y}'] ?? 0));
+  const labels = data.map(d => String(d[f.x] ?? ''));
+  const values = data.map(d => Number(d[f.y] ?? 0));
   const maxVal = d3.max(values) || 0;
 
   ${horizontal ? `
@@ -105,6 +107,8 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
 (function() {
   const container = document.getElementById('${id}');
   const data = ${data};
+  if (!data.length) return;
+  const f = resolveFields(data, '${x}', '${y}');
   const margin = {top: 20, right: 20, bottom: 40, left: 50};
   const width = container.clientWidth - margin.left - margin.right;
   const height = 260 - margin.top - margin.bottom;
@@ -115,8 +119,8 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
     .attr("preserveAspectRatio", "xMidYMid meet")
     .append("g").attr("transform", \`translate(\${margin.left},\${margin.top})\`);
 
-  const dates = data.map(d => new Date(String(d['${x}'])));
-  const values = data.map(d => Number(d['${y}'] ?? 0));
+  const dates = data.map(d => new Date(String(d[f.x])));
+  const values = data.map(d => Number(d[f.y] ?? 0));
 
   const xScale = d3.scaleTime().domain(d3.extent(dates)).range([0, width]);
   const yScale = d3.scaleLinear().domain([0, (d3.max(values) || 0) * 1.1]).range([height, 0]);
@@ -175,6 +179,8 @@ function generateDonutScript(id: string, data: string, x: string, y: string): st
 (function() {
   const container = document.getElementById('${id}');
   const data = ${data};
+  if (!data.length) return;
+  const f = resolveFields(data, '${x}', '${y}');
   const size = Math.min(container.clientWidth, 280);
   const radius = size / 2;
   const innerRadius = radius * 0.55;
@@ -185,8 +191,8 @@ function generateDonutScript(id: string, data: string, x: string, y: string): st
     .attr("preserveAspectRatio", "xMidYMid meet")
     .append("g").attr("transform", \`translate(\${radius},\${radius})\`);
 
-  const values = data.map(d => Math.abs(Number(d['${y}'] ?? 0)));
-  const labels = data.map(d => String(d['${x}'] ?? ''));
+  const values = data.map(d => Math.abs(Number(d[f.y] ?? 0)));
+  const labels = data.map(d => String(d[f.x] ?? ''));
   const total = d3.sum(values);
 
   const pie = d3.pie().sort(null).padAngle(0.02);
@@ -228,6 +234,8 @@ function generateTreemapScript(id: string, data: string, x: string, y: string): 
 (function() {
   const container = document.getElementById('${id}');
   const data = ${data};
+  if (!data.length) return;
+  const f = resolveFields(data, '${x}', '${y}');
   const width = container.clientWidth;
   const height = 300;
   const colors = ["#60a5fa","#a78bfa","#34d399","#fbbf24","#f87171","#38bdf8","#c084fc","#4ade80"];
@@ -236,7 +244,7 @@ function generateTreemapScript(id: string, data: string, x: string, y: string): 
     .attr("viewBox", \`0 0 \${width} \${height}\`)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
-  const root = d3.hierarchy({children: data.map(d => ({name: String(d['${x}']??''), value: Math.abs(Number(d['${y}']??0))}))})
+  const root = d3.hierarchy({children: data.map(d => ({name: String(d[f.x]??''), value: Math.abs(Number(d[f.y]??0))}))})
     .sum(d => d.value || 0).sort((a,b) => (b.value||0) - (a.value||0));
 
   d3.treemap().size([width, height]).paddingInner(2).paddingOuter(3).round(true)(root);
@@ -713,6 +721,24 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.15 });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Field resolver: handles mismatched field names from AI ──
+window.resolveFields = function(data, xField, yField) {
+  if (!data.length) return { x: xField, y: yField };
+  const keys = Object.keys(data[0]);
+  const hasX = keys.includes(xField);
+  const hasY = keys.includes(yField);
+  if (hasX && hasY) return { x: xField, y: yField };
+
+  // Try to find numeric and string fields
+  const numericKeys = keys.filter(k => data.some(d => typeof d[k] === 'number' || (!isNaN(Number(d[k])) && d[k] !== '' && d[k] !== null)));
+  const stringKeys = keys.filter(k => !numericKeys.includes(k));
+
+  const resolvedX = hasX ? xField : (stringKeys[0] || keys[0]);
+  const resolvedY = hasY ? yField : (numericKeys[0] || keys[1] || keys[0]);
+  console.log('Field resolve:', xField, '->', resolvedX, ',', yField, '->', resolvedY, 'from', keys);
+  return { x: resolvedX, y: resolvedY };
+};
 
 // ── Charts ──
 ${scripts.join("\n")}
