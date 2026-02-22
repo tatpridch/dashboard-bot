@@ -38,6 +38,15 @@ VISUALIZATION SELECTION — MATCH THE STORY BEAT:
 - "The big picture" / proportions → treemap (make the dominant segment obvious)
 - "The raw evidence" / detailed records → table (when the reader needs to see for themselves)
 
+VISUAL RICHNESS — THINK D3.js MASTERPIECE:
+Your output will be rendered with D3.js v7 into a polished, animated dashboard. Structure your data to enable maximum visual impact:
+- Timelines become animated line draws with gradient area fills and glowing inflection points
+- Bar charts get smooth entrance animations, hover tooltips, and gradient fills
+- Donut charts use arc-tween animations with a dramatic center counter
+- Treemaps show proportional hierarchy with color-coded depth
+- Tables have alternating rows, sticky headers, and highlighted outlier cells
+Think of each chart as a REVEAL MOMENT — the data should appear progressively, drawing the viewer through the story. The hero metrics at the top will count-up from zero with animated counters. The whole page scrolls like a narrative, not a spreadsheet.
+
 MAKE EACH DASHBOARD UNIQUE:
 - Vary chart type combinations. Don't default to the same bar+donut+timeline every time.
 - If the data is about people → lead with the human angle (demographics, behavior patterns)
@@ -45,6 +54,7 @@ MAKE EACH DASHBOARD UNIQUE:
 - If the data is about time → lead with the trajectory (what changed and when)
 - If the data is about categories → lead with the outlier (what stands out, what broke the pattern)
 - The title should be specific and intriguing, not generic. "Revenue Dashboard" is boring. "How We Lost $2M in Q3 — and Where It Went" is a story.
+- Structure datasets so they CONTRAST: put a growth chart next to a decline chart, a total next to a breakdown.
 
 OUTPUT RULES:
 - 4-8 hero metrics — pick numbers with punch. Include change percentages when available.

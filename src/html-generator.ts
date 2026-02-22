@@ -62,12 +62,16 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
     .call(d3.axisBottom(xScale).ticks(5))
     .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
     .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
-  svg.selectAll(".bar").data(data).join("rect")
+  const bars = svg.selectAll(".bar").data(data).join("rect")
     .attr("y", (_,i) => yScale(labels[i]) ?? 0)
     .attr("height", yScale.bandwidth()).attr("x", 0)
     .attr("width", 0).attr("rx", 4)
     .attr("fill", (_,i) => colors[i % colors.length]).attr("opacity", 0.85)
-    .transition().duration(600).delay((_,i) => i * 50)
+    .style("cursor", "pointer")
+    .on("mouseover", function(evt,d,i) { d3.select(this).attr("opacity",1); const idx = data.indexOf(d); showTooltip(evt, '<strong>'+labels[idx]+'</strong><br>'+values[idx].toLocaleString()); })
+    .on("mousemove", function(evt) { showTooltip(evt, tooltip.innerHTML); })
+    .on("mouseout", function() { d3.select(this).attr("opacity",0.85); hideTooltip(); });
+  bars.transition().duration(600).delay((_,i) => i * 50)
     .attr("width", (_,i) => xScale(values[i]));
   ` : `
   const xScale = d3.scaleBand().domain(labels).range([0, width]).padding(0.3);
@@ -81,11 +85,15 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
   svg.append("g").call(d3.axisLeft(yScale).ticks(5))
     .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
     .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
-  svg.selectAll(".bar").data(data).join("rect")
+  const bars = svg.selectAll(".bar").data(data).join("rect")
     .attr("x", (_,i) => xScale(labels[i]) ?? 0)
     .attr("width", xScale.bandwidth()).attr("y", height).attr("height", 0)
     .attr("rx", 4).attr("fill", (_,i) => colors[i % colors.length]).attr("opacity", 0.85)
-    .transition().duration(600).delay((_,i) => i * 50)
+    .style("cursor", "pointer")
+    .on("mouseover", function(evt,d) { d3.select(this).attr("opacity",1); const idx = data.indexOf(d); showTooltip(evt, '<strong>'+labels[idx]+'</strong><br>'+values[idx].toLocaleString()); })
+    .on("mousemove", function(evt) { showTooltip(evt, tooltip.innerHTML); })
+    .on("mouseout", function() { d3.select(this).attr("opacity",0.85); hideTooltip(); });
+  bars.transition().duration(600).delay((_,i) => i * 50)
     .attr("y", (_,i) => yScale(values[i]))
     .attr("height", (_,i) => height - yScale(values[i]));
   `}
@@ -121,8 +129,15 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
     .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
     .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
 
+  // Gradient area fill
+  const gradId = '${id}-grad';
+  const defs = svg.append("defs");
+  const grad = defs.append("linearGradient").attr("id", gradId).attr("x1","0").attr("y1","0").attr("x2","0").attr("y2","1");
+  grad.append("stop").attr("offset","0%").attr("stop-color",lineColor).attr("stop-opacity",0.3);
+  grad.append("stop").attr("offset","100%").attr("stop-color",lineColor).attr("stop-opacity",0.02);
+
   const area = d3.area().x((_,i) => xScale(dates[i])).y0(height).y1((_,i) => yScale(values[i])).curve(d3.curveMonotoneX);
-  svg.append("path").datum(d3.range(data.length)).attr("fill","rgba(96,165,250,0.1)").attr("d", area);
+  svg.append("path").datum(d3.range(data.length)).attr("fill",\`url(#\${gradId})\`).attr("d", area);
 
   const line = d3.line().x((_,i) => xScale(dates[i])).y((_,i) => yScale(values[i])).curve(d3.curveMonotoneX);
   const path = svg.append("path").datum(d3.range(data.length)).attr("fill","none").attr("stroke",lineColor).attr("stroke-width",2.5).attr("d", line);
@@ -132,11 +147,26 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
     .attr("stroke-dashoffset", totalLength)
     .transition().duration(1000).ease(d3.easeQuadOut).attr("stroke-dashoffset", 0);
 
+  // Glow filter
+  const filter = defs.append("filter").attr("id","${id}-glow");
+  filter.append("feGaussianBlur").attr("stdDeviation","3").attr("result","blur");
+  filter.append("feMerge").html('<feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>');
+
   svg.selectAll(".dot").data(data).join("circle")
     .attr("cx", (_,i) => xScale(dates[i]))
     .attr("cy", (_,i) => yScale(values[i]))
-    .attr("r", 3.5).attr("fill", lineColor).attr("stroke","var(--donut-stroke)").attr("stroke-width",2)
-    .attr("opacity", 0).transition().delay(1000).duration(300).attr("opacity", 0.8);
+    .attr("r", 4).attr("fill", lineColor).attr("stroke","var(--donut-stroke)").attr("stroke-width",2)
+    .attr("filter","url(#${id}-glow)")
+    .style("cursor","pointer")
+    .on("mouseover", function(evt,d) {
+      d3.select(this).transition().duration(150).attr("r",7);
+      const idx = data.indexOf(d);
+      const dateStr = dates[idx].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      showTooltip(evt, '<strong>'+dateStr+'</strong><br>'+values[idx].toLocaleString());
+    })
+    .on("mousemove", function(evt) { showTooltip(evt, tooltip.innerHTML); })
+    .on("mouseout", function() { d3.select(this).transition().duration(150).attr("r",4); hideTooltip(); })
+    .attr("opacity", 0).transition().delay(1000).duration(300).attr("opacity", 0.9);
 })();`;
 }
 
@@ -165,17 +195,31 @@ function generateDonutScript(id: string, data: string, x: string, y: string): st
   svg.selectAll(".arc").data(pie(values)).join("path")
     .attr("fill", (_,i) => colors[i % colors.length])
     .attr("opacity", 0.85).attr("stroke","var(--donut-stroke)").attr("stroke-width",2)
+    .style("cursor","pointer")
+    .on("mouseover", function(evt,d) {
+      d3.select(this).attr("opacity",1).attr("transform","scale(1.04)");
+      const idx = d.index;
+      const pct = ((values[idx]/total)*100).toFixed(1);
+      showTooltip(evt, '<strong>'+labels[idx]+'</strong><br>'+values[idx].toLocaleString()+' ('+pct+'%)');
+    })
+    .on("mousemove", function(evt) { showTooltip(evt, tooltip.innerHTML); })
+    .on("mouseout", function() { d3.select(this).attr("opacity",0.85).attr("transform","scale(1)"); hideTooltip(); })
     .transition().duration(800)
     .attrTween("d", function(d) {
       const interp = d3.interpolate({startAngle:0, endAngle:0}, d);
       return t => arc(interp(t));
     });
 
-  svg.append("text").attr("text-anchor","middle").attr("dy","-0.1em")
-    .attr("fill","#e5e5e5").attr("font-size","20px").attr("font-weight","700")
-    .text(total >= 1000 ? (total/1000).toFixed(1)+'k' : total.toLocaleString());
+  const centerText = svg.append("text").attr("text-anchor","middle").attr("dy","-0.1em")
+    .attr("fill","var(--metric-value)").attr("font-size","20px").attr("font-weight","700");
+  // Animated center counter
+  const fmt = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'k' : Math.round(v).toLocaleString();
+  centerText.transition().duration(1000).tween("text", function() {
+    const i = d3.interpolateNumber(0, total);
+    return t => { this.textContent = fmt(i(t)); };
+  });
   svg.append("text").attr("text-anchor","middle").attr("dy","1.4em")
-    .attr("fill","#888").attr("font-size","11px").text("Total");
+    .attr("fill","var(--text-subtle)").attr("font-size","11px").text("Total");
 })();`;
 }
 
@@ -205,6 +249,15 @@ function generateTreemapScript(id: string, data: string, x: string, y: string): 
     .attr("height", d => Math.max(0, d.y1 - d.y0))
     .attr("fill", (_,i) => colors[i % colors.length])
     .attr("rx", 4).attr("opacity", 0)
+    .style("cursor","pointer")
+    .on("mouseover", function(evt,d) {
+      d3.select(this).attr("opacity",1);
+      const totalVal = d3.sum(root.leaves(), l => l.value);
+      const pct = ((d.value/totalVal)*100).toFixed(1);
+      showTooltip(evt, '<strong>'+d.data.name+'</strong><br>'+d.data.value.toLocaleString()+' ('+pct+'%)');
+    })
+    .on("mousemove", function(evt) { showTooltip(evt, tooltip.innerHTML); })
+    .on("mouseout", function() { d3.select(this).attr("opacity",0.85); hideTooltip(); })
     .transition().duration(600).delay((_,i) => i * 30).attr("opacity", 0.85);
 
   cells.append("text").attr("x",6).attr("y",16).attr("fill","#fff")
@@ -238,11 +291,11 @@ export function generateDashboard(meta: AnalysisMeta, theme: Theme = "dark"): st
   const chartsHtml = meta.datasets
     .map((ds, i) => {
       if (ds.viz_hint === "table") {
-        return `<div class="db-card"><div class="db-card-title">${escapeHtml(ds.name)}</div>${generateTableHtml(ds)}</div>`;
+        return `<div class="db-card reveal"><div class="db-card-title">${escapeHtml(ds.name)}</div>${generateTableHtml(ds)}</div>`;
       }
       const script = generateChartScript(ds, i);
       if (script) scripts.push(script);
-      return `<div class="db-card"><div class="db-card-title">${escapeHtml(ds.name)}</div><div id="chart-${i}" class="db-chart-container"></div></div>`;
+      return `<div class="db-card reveal"><div class="db-card-title">${escapeHtml(ds.name)}</div><div id="chart-${i}" class="db-chart-container"></div></div>`;
     })
     .join("\n");
 
@@ -252,8 +305,10 @@ export function generateDashboard(meta: AnalysisMeta, theme: Theme = "dark"): st
       const changeHtml = m.change != null
         ? `<span class="db-metric-change ${m.change >= 0 ? "positive" : "negative"}">${m.change >= 0 ? "+" : ""}${m.change}%</span>`
         : "";
-      return `<div class="db-metric">
-        <div class="db-metric-value">${m.unit && m.unit !== "%" ? `<span class="db-metric-unit">${escapeHtml(m.unit)}</span>` : ""}${formatValue(m.value)}${m.unit === "%" ? '<span class="db-metric-unit">%</span>' : ""}</div>
+      const prefix = m.unit && m.unit !== "%" ? `<span class="db-metric-unit">${escapeHtml(m.unit)}</span>` : "";
+      const suffix = m.unit === "%" ? '<span class="db-metric-unit">%</span>' : "";
+      return `<div class="db-metric reveal">
+        <div class="db-metric-value">${prefix}<span class="countup" data-target="${m.value}">0</span>${suffix}</div>
         <div class="db-metric-label">${escapeHtml(m.label)}${changeHtml}</div>
       </div>`;
     })
@@ -466,6 +521,50 @@ body {
   border-radius: 8px;
   border-left: 3px solid var(--deeper-border);
 }
+/* Tooltip */
+.db-tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: ${theme === "dark" ? "rgba(20,20,40,0.95)" : "rgba(255,255,255,0.95)"};
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.15s;
+  max-width: 200px;
+}
+.db-tooltip.visible { opacity: 1; }
+.db-tooltip strong { color: var(--metric-value); }
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* Card hover */
+.db-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.db-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px ${theme === "dark" ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.08)"};
+}
+.db-metric {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.db-metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px ${theme === "dark" ? "rgba(96,165,250,0.15)" : "rgba(59,130,246,0.1)"};
+}
 /* Footer */
 .db-footer {
   text-align: center;
@@ -496,11 +595,62 @@ body {
 
   <div class="db-charts">${chartsHtml}</div>
 
-  ${meta.dig_deeper_prompts.length > 0 ? `<div class="db-deeper"><h3>Dig Deeper</h3><ul>${promptsHtml}</ul></div>` : ""}
+  ${meta.dig_deeper_prompts.length > 0 ? `<div class="db-deeper reveal"><h3>Dig Deeper</h3><ul>${promptsHtml}</ul></div>` : ""}
 
   <div class="db-footer">Generated by Dashboard Bot &middot; Expires in 7 days</div>
 </div>
+<div class="db-tooltip" id="tooltip"></div>
 <script>
+// ── Tooltip helper ──
+const tooltip = document.getElementById('tooltip');
+window.showTooltip = function(evt, html) {
+  tooltip.innerHTML = html;
+  tooltip.classList.add('visible');
+  tooltip.style.left = (evt.clientX + 12) + 'px';
+  tooltip.style.top = (evt.clientY - 10) + 'px';
+};
+window.hideTooltip = function() {
+  tooltip.classList.remove('visible');
+};
+
+// ── Count-up animation ──
+function animateCountUp(el) {
+  const target = parseFloat(el.dataset.target);
+  const duration = 1200;
+  const start = performance.now();
+  const format = (v) => {
+    if (Math.abs(v) >= 1e6) return (v/1e6).toFixed(1) + 'M';
+    if (Math.abs(v) >= 1e3) return (v/1e3).toFixed(1) + 'k';
+    return Number.isInteger(target) ? Math.round(v).toLocaleString('en-US') : v.toFixed(1);
+  };
+  function tick(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    el.textContent = format(target * ease);
+    if (t < 1) requestAnimationFrame(tick);
+    else el.textContent = format(target);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Scroll reveal + countup trigger ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      entry.target.querySelectorAll('.countup').forEach(el => {
+        if (!el.dataset.animated) {
+          el.dataset.animated = '1';
+          animateCountUp(el);
+        }
+      });
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Charts ──
 ${scripts.join("\n")}
 <\/script>
 </body>
