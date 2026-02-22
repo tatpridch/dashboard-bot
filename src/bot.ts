@@ -151,6 +151,8 @@ export function createBot(): BotInstance {
 
   // ── Document handler ──
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
   bot.on(message("document"), async (ctx) => {
     const state = getState(ctx.from.id);
 
@@ -162,6 +164,19 @@ export function createBot(): BotInstance {
 
     const doc = ctx.message.document;
     const caption = ctx.message.caption || undefined;
+
+    // File size guard
+    if (doc.file_size && doc.file_size > MAX_FILE_SIZE) {
+      await ctx.reply(
+        "🚫 Whoa, that file is over 10 MB!\n\n" +
+          "First off, we don't have the budget for that kind of compute.\n" +
+          "Second, this is an MVP — built in a hackathon, held together with coffee and hope.\n" +
+          "Third, files that big probably contain real user data, " +
+          "and our MVP isn't hardened for security yet — so let's not risk it.\n\n" +
+          "Try a smaller file or paste a sample of the data as text.",
+      );
+      return;
+    }
 
     const status = await ctx.reply("⏳ Parsing file...");
 

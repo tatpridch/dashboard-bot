@@ -1,90 +1,91 @@
-# Dashboard Bot — Telegram бот для анализа данных и генерации дашбордов
+# Dashboard Bot — Telegram bot for data analysis and dashboard generation
 
-## Что сделано
+## What it does
 
-Полностью рабочий Telegram бот, который:
-1. Принимает файлы (CSV, XLSX, JSON, HTML, TSV, etc.) или текстовые данные
-2. Парсит их на сервере (Node.js)
-3. Отправляет Claude Sonnet 4.5 для анализа с промптом data-аналитика
-4. Получает структурированный JSON (AnalysisMeta) с метриками, датасетами, графиками
-5. Генерирует standalone HTML дашборд с D3.js v7 (CDN) и inline-скриптами
-6. Сохраняет как snapshot с 7-дневным TTL
-7. Возвращает ссылку через ngrok
+A fully working Telegram bot that:
+1. Accepts files (CSV, XLSX, JSON, HTML, TSV, etc.) or pasted text data
+2. Parses them server-side (Node.js)
+3. Sends to Claude Sonnet 4.5 for analysis with a data analyst system prompt
+4. Receives structured JSON (AnalysisMeta) with metrics, datasets, chart configs
+5. Generates a standalone HTML dashboard with D3.js v7 (CDN) and inline scripts
+6. Saves as a snapshot with 7-day TTL
+7. Returns a link + screenshot to the user
 
-## Архитектура
+## Architecture
 
 ```
-User → Telegram Bot (Telegraf, polling) → Parse file → Claude API
-                                                          ↓
-                                              AnalysisMeta JSON
-                                                          ↓
-                                    HTML Generator (D3 inline scripts)
-                                                          ↓
-                              Snapshot storage → Express /s/:slug
-                                                          ↓
-                                    Bot sends ngrok link to user
+User → Telegram Bot (Telegraf) → Parse file → Claude API
+                                                   ↓
+                                       AnalysisMeta JSON
+                                                   ↓
+                                 HTML Generator (D3 inline scripts)
+                                                   ↓
+                           Snapshot storage → Express /s/:slug
+                                                   ↓
+                              Bot sends link + JPG screenshot
 ```
 
-## Стек
-- **Runtime**: Node.js + tsx
-- **Bot**: Telegraf (polling mode)
+## Stack
+- **Runtime**: Node.js + TypeScript
+- **Bot**: Telegraf (webhook mode in production, polling for local dev)
 - **AI**: @anthropic-ai/sdk, model: claude-sonnet-4-5-20250929
-- **Server**: Express на порту 3000
-- **Парсер**: xlsx для spreadsheets, regex для HTML таблиц
-- **Визуализация**: D3.js v7 CDN, inline scripts в HTML
-- **Туннель**: ngrok → https://intershifting-haply-lawerence.ngrok-free.dev
+- **Server**: Express
+- **Parser**: xlsx for spreadsheets, regex for HTML tables
+- **Visualization**: D3.js v7 CDN, inline scripts in HTML
+- **Screenshots**: Puppeteer (headless Chrome)
+- **Hosting**: Railway (bot + dashboards), Alpic (MCP endpoint)
 
-## Структура файлов
+## File structure
 
 ```
 src/
-├── index.ts          — Express + Telegraf запуск
-├── bot.ts            — Обработчики: /start, /help, документы, текст
-├── analyzer.ts       — Claude API с системным промптом аналитика
-├── file-parser.ts    — Парсер файлов (адаптирован из autodashboard-skybridge)
-├── html-generator.ts — Генерация standalone HTML с D3 графиками
-├── snapshots.ts      — Файловое хранилище снапшотов (7-дневный TTL)
+├── index.ts          — Express server + bot startup (webhook/polling)
+├── bot.ts            — Telegram handlers: /start, /help, documents, text, inline keyboards
+├── analyzer.ts       — Claude API with data analyst system prompt
+├── file-parser.ts    — File parser (CSV, XLSX, JSON, HTML, text)
+├── html-generator.ts — Standalone HTML generation with D3 charts (dark/light theme)
+├── screenshot.ts     — Puppeteer-based dashboard screenshot (JPG)
+├── mcp.ts            — Minimal MCP endpoint for Alpic integration
+├── snapshots.ts      — File-based snapshot storage (7-day TTL)
 └── types.ts          — AnalysisMeta, Dataset, Metric
 ```
 
-## Поддерживаемые графики
-- bar / bar_horizontal — столбчатые с анимацией
-- timeline — линейный с area и animated line draw
-- donut — круговая с arc-tween
-- treemap — пропорциональная карта
-- table — HTML таблица со sticky header
+## Supported chart types
+- bar / bar_horizontal — animated column charts
+- timeline — line chart with area fill and animated line draw
+- donut — pie chart with arc-tween animation
+- treemap — proportional area map
+- table — HTML table with sticky header
 
-## Что нужно доделать
+## Bot conversation flow
 
-### Баги / стабильность
-- [ ] Обработка больших файлов (>20MB) — Telegram лимит
-- [ ] Fallback если Claude вернёт невалидный JSON
-- [ ] Таймаут для Claude API запросов
-- [ ] Обработка фото/изображений (OCR?)
-
-### Фичи
-- [ ] Кнопки "Dig Deeper" в Telegram (inline keyboard → повторный анализ)
-- [ ] Поддержка нескольких файлов за раз
-- [ ] Кэширование — не анализировать один и тот же файл дважды
-- [ ] Превью дашборда как скриншот (puppeteer) в Telegram
-- [ ] Мультиязычность (русский/английский) в промпте анализа
-- [ ] Responsive дизайн для мобильных дашбордов
-
-### Деплой
-- [ ] Перенести на VPS/облако (см. HOSTING.md)
-- [ ] Webhook вместо polling для продакшена
-- [ ] Rate limiting
-- [ ] Логирование в файл
-
-## Как запустить
-
-```bash
-cd /Users/tpridchenko/dashboard-bot
-npm install
-# Заполнить .env (TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY, BASE_URL)
-npx tsx src/index.ts
-# В отдельном терминале: ngrok http 3000
+```
+File/text → Size check (>10MB rejected) → Empty check → Theme (dark/light) → Focus (optional) → AI analysis → Link + Screenshot
 ```
 
-## Связанный проект
-Код парсера, типов и снапшотов адаптирован из `autodashboard-skybridge` — Skybridge MCP приложение с D3 дашбордами.
+Each step has Cancel button. "New dashboard" button after completion with visual separator.
+
+## How to run
+
+```bash
+cd /path/to/dashboard-bot
+npm install
+# Fill .env (TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY, BASE_URL)
+npm run dev     # local with polling
+npm run build   # compile TypeScript
+npm start       # production
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| TELEGRAM_BOT_TOKEN | Yes | Telegram bot token from @BotFather |
+| ANTHROPIC_API_KEY | Yes | Anthropic API key for Claude |
+| BASE_URL | Yes | Public URL for dashboard links |
+| WEBHOOK_MODE | No | Set to "true" for webhook mode (production) |
+| SNAPSHOTS_DIR | No | Override snapshot storage path (default: ./snapshots or /tmp/snapshots) |
+| DASHBOARD_API_URL | No | URL for MCP tool to proxy dashboard creation |
+
+## Related project
+Parser, types, and snapshot code adapted from `autodashboard-skybridge` — a Skybridge MCP app with D3 dashboards.

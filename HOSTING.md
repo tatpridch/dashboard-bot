@@ -1,54 +1,35 @@
-# Варианты хостинга Dashboard Bot
+# Hosting — Dashboard Bot
 
-Сейчас бот работает локально + ngrok туннель. Для продакшена нужен постоянный сервер.
+## Current setup
 
-## 1. VPS (рекомендуется)
+- **Railway** — main server: Telegram bot (webhook), Express, dashboard snapshots
+- **Alpic** — MCP endpoint only (proxies dashboard creation to Railway)
 
-### DigitalOcean Droplet
-- **Цена**: $4-6/мес (1 vCPU, 512MB-1GB RAM)
-- **Плюсы**: полный контроль, статический IP, можно поставить любой софт
-- **Деплой**: ssh → git pull → pm2 start
-- **URL**: свой домен или IP
+## Railway (production)
 
-### Hetzner Cloud
-- **Цена**: €3.29/мес (CX22 — 2 vCPU, 4GB RAM)
-- **Плюсы**: дешевле DigitalOcean, серверы в EU
-- **Деплой**: аналогично DO
+- **URL**: `dashboard-bot-production.up.railway.app`
+- **Plan**: Hobby ($5/mo) or free trial
+- **Deploy**: auto-deploy on push to `main`
+- **Env vars**: set in Railway dashboard → service → Variables
 
-## 2. PaaS (проще всего)
+## Alpic (MCP)
 
-### Railway
-- **Цена**: $5/мес (Hobby plan) или бесплатный trial
-- **Плюсы**: git push → автодеплой, встроенный домен, переменные окружения в UI
-- **Деплой**: подключить GitHub repo → автоматически
-- **URL**: *.up.railway.app
+- **URL**: `dashboard-bot-0a1dae4f.alpic.live`
+- **Purpose**: MCP `analyze_data` tool visible in Alpic Playground and Claude.ai connectors
+- **Note**: Alpic only routes `/mcp` — all other routes return 404
+- **Env var**: `DASHBOARD_API_URL` must point to Railway URL
 
-### Render
-- **Цена**: бесплатный tier (750 часов/мес) или $7/мес
-- **Плюсы**: автодеплой из GitHub, бесплатный SSL
-- **Минус**: бесплатный tier засыпает после 15 мин неактивности
-- **URL**: *.onrender.com
+## Alternative hosting options
 
-### Fly.io
-- **Цена**: бесплатный tier (3 shared VMs)
-- **Плюсы**: контейнеры, глобальные регионы, быстрый
-- **Деплой**: `fly launch` → `fly deploy`
-- **URL**: *.fly.dev
+### VPS (full control)
+- **Hetzner Cloud**: €3.29/mo (CX22 — 2 vCPU, 4GB RAM)
+- **DigitalOcean**: $4-6/mo (1 vCPU, 512MB-1GB RAM)
+- Deploy: ssh → git pull → pm2 start
 
-## 3. Serverless (сложнее для бота)
+### PaaS (zero-config)
+- **Render**: free tier (750 hrs/mo) or $7/mo — sleeps after 15 min inactivity on free tier
+- **Fly.io**: free tier (3 shared VMs) — `fly launch` → `fly deploy`
 
-### Vercel / Netlify
-- Не подходят напрямую — нужен long-running process для Telegram polling
-- Можно переделать на webhook mode, но Express + snapshot storage усложняют
-
-## Рекомендация
-
-Для этого проекта лучший вариант — **Railway** или **Hetzner**:
-- Railway если хочется zero-config деплой
-- Hetzner если хочется дёшево и с полным контролем
-
-### При переходе на сервер:
-1. Поменять Telegraf с polling на webhook (`bot.telegram.setWebhook(url)`)
-2. Убрать ngrok — сервер будет иметь свой URL
-3. Добавить pm2 или systemd для автоперезапуска
-4. Настроить nginx как reverse proxy (опционально)
+### Not recommended
+- **Vercel / Netlify**: no long-running processes, would need webhook-only architecture
+- **Alpic alone**: only routes `/mcp`, cannot serve dashboards or receive Telegram webhooks
