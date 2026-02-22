@@ -4,8 +4,20 @@ import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Cloud platforms (Alpic/Lambda) have read-only fs — use /tmp there
-const SNAPSHOTS_DIR = process.env.SNAPSHOTS_DIR || join(__dirname, "..", "snapshots");
+
+function resolveSnapshotsDir(): string {
+  if (process.env.SNAPSHOTS_DIR) return process.env.SNAPSHOTS_DIR;
+  const local = join(__dirname, "..", "snapshots");
+  try {
+    mkdirSync(local, { recursive: true });
+    return local;
+  } catch {
+    // Read-only filesystem (Alpic/Lambda) — fall back to /tmp
+    return "/tmp/snapshots";
+  }
+}
+
+const SNAPSHOTS_DIR = resolveSnapshotsDir();
 const INDEX_FILE = join(SNAPSHOTS_DIR, "snapshots.json");
 const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
