@@ -73,28 +73,32 @@ app.get("/", (_req, res) => {
 // Init
 initSnapshots();
 
-const { bot, webhookPath, setupWebhook } = createBot();
+// Telegram bot is optional — server runs without it (e.g. first deploy before env vars are set)
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  const { bot, webhookPath, setupWebhook } = createBot();
 
-if (WEBHOOK_MODE) {
-  // Webhook mode — for Alpic / production
-  // Express strips the mount path prefix, so Telegraf filter sees "/"
-  app.use(webhookPath, bot.webhookCallback("/"));
+  if (WEBHOOK_MODE) {
+    app.use(webhookPath, bot.webhookCallback("/"));
 
-  app.listen(PORT, async () => {
-    console.log(`Express server running on port ${PORT} (webhook mode)`);
-    await setupWebhook(BASE_URL);
-  });
+    app.listen(PORT, async () => {
+      console.log(`Express server running on port ${PORT} (webhook mode)`);
+      await setupWebhook(BASE_URL);
+    });
+  } else {
+    app.listen(PORT, () => {
+      console.log(`Express server running on http://localhost:${PORT} (polling mode)`);
+    });
+
+    bot.launch(() => {
+      console.log("Telegram bot started (polling)");
+    });
+  }
+
+  process.once("SIGINT", () => bot.stop("SIGINT"));
+  process.once("SIGTERM", () => bot.stop("SIGTERM"));
 } else {
-  // Polling mode — for local development
+  console.warn("TELEGRAM_BOT_TOKEN not set — running Express only (no Telegram bot)");
   app.listen(PORT, () => {
-    console.log(`Express server running on http://localhost:${PORT} (polling mode)`);
-  });
-
-  bot.launch(() => {
-    console.log("Telegram bot started (polling)");
+    console.log(`Express server running on port ${PORT} (no bot)`);
   });
 }
-
-// Graceful shutdown
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
