@@ -13,7 +13,7 @@ interface UserState {
   step: "idle" | "awaiting_confirm" | "awaiting_theme" | "awaiting_focus";
   parsed?: ParsedFile;
   theme?: Theme;
-  statusMessageId?: number;
+  focus?: string;
 }
 
 const sessions = new Map<number, UserState>();
@@ -21,6 +21,10 @@ const sessions = new Map<number, UserState>();
 function getState(userId: number): UserState {
   if (!sessions.has(userId)) sessions.set(userId, { step: "idle" });
   return sessions.get(userId)!;
+}
+
+function resetState(userId: number) {
+  sessions.set(userId, { step: "idle" });
 }
 
 export interface BotInstance {
@@ -44,35 +48,41 @@ export function createBot(): BotInstance {
     console.log(`Webhook set to ${url}`);
   }
 
+  // ── Commands ──
+
   bot.start((ctx) => {
-    const state = getState(ctx.from.id);
-    state.step = "idle";
+    resetState(ctx.from.id);
     ctx.reply(
-      "Hi! I'm Dashboard Bot.\n\n" +
+      "👋 Hi! I'm Dashboard Bot.\n\n" +
         "Send me a data file (CSV, XLSX, JSON, HTML, TSV, etc.) or paste raw data as text, " +
-        "and I'll analyze it with AI and generate an interactive dashboard for you.\n\n" +
-        "You can add a caption to a file to customize the analysis focus.\n\n" +
-        "/help — supported formats",
+        "and I'll analyze it with AI and generate an interactive dashboard.\n\n" +
+        "/help — supported formats\n" +
+        "/cancel — reset at any point",
     );
   });
 
   bot.help((ctx) => {
     ctx.reply(
-      "Supported formats:\n" +
-        "- CSV, TSV, PSV\n" +
-        "- XLSX, XLS, ODS\n" +
-        "- JSON, JSONL\n" +
-        "- HTML (tables)\n" +
-        "- Plain text / logs\n\n" +
-        "How to use:\n" +
-        "1. Send a file — I'll parse and analyze it\n" +
-        "2. Choose light or dark theme\n" +
-        "3. Optionally add focus instructions\n" +
-        "4. Get a link + screenshot of your dashboard!",
+      "📋 Supported formats:\n" +
+        "CSV, TSV, PSV, XLSX, XLS, ODS, JSON, JSONL, HTML (tables), plain text, logs\n\n" +
+        "How it works:\n" +
+        "1. Send a file or paste data\n" +
+        "2. Choose 🌙 Dark or ☀️ Light theme\n" +
+        "3. Add focus instructions (or skip)\n" +
+        "4. Get a dashboard link + screenshot!\n\n" +
+        "/cancel — start over at any point",
     );
   });
 
-  // Callback query handler for inline keyboard buttons
+  bot.command("cancel", async (ctx) => {
+    resetState(ctx.from.id);
+    await ctx.reply(
+      "🔄 Reset! Send a new file or paste data to start.",
+    );
+  });
+
+  // ── Inline keyboard handler ──
+
   bot.on("callback_query", async (ctx) => {
     const data = (ctx.callbackQuery as any).data as string;
     if (!data) return;
@@ -80,55 +90,80 @@ export function createBot(): BotInstance {
 
     const state = getState(ctx.from.id);
 
-    // Confirmation for empty/small files
+    // ── Cancel from any step ──
+    if (data === "cancel") {
+      resetState(ctx.from.id);
+      await ctx.editMessageText("🔄 Cancelled. Send a new file or paste data to start fresh.");
+      return;
+    }
+
+    // ── New dashboard (after completion) ──
+    if (data === "new_dashboard") {
+      resetState(ctx.from.id);
+      await ctx.reply("─────────────────────\n📊 Ready for new data! Send a file or paste text.");
+      return;
+    }
+
+    // ── Confirmation for small files ──
     if (data === "confirm_yes" && state.step === "awaiting_confirm") {
       state.step = "awaiting_theme";
       await ctx.editMessageText(
-        "Got it! Choose a theme for your dashboard:",
+        "Choose a theme for your dashboard:",
         Markup.inlineKeyboard([
-          Markup.button.callback("🌙 Dark", "theme_dark"),
-          Markup.button.callback("☀️ Light", "theme_light"),
+          [Markup.button.callback("🌙 Dark", "theme_dark"), Markup.button.callback("☀️ Light", "theme_light")],
+          [Markup.button.callback("✖ Cancel", "cancel")],
         ]),
       );
       return;
     }
 
     if (data === "confirm_no" && state.step === "awaiting_confirm") {
-      state.step = "idle";
-      state.parsed = undefined;
+      resetState(ctx.from.id);
       await ctx.editMessageText("OK, send me a different file or paste data.");
       return;
     }
 
-    // Theme selection
+    // ── Theme selection ──
     if (data.startsWith("theme_") && state.step === "awaiting_theme") {
       state.theme = data === "theme_light" ? "light" : "dark";
       state.step = "awaiting_focus";
       await ctx.editMessageText(
         `Theme: ${state.theme === "dark" ? "🌙 Dark" : "☀️ Light"}\n\n` +
-          "Want to add specific focus for the analysis?\n" +
-          "Send a message (e.g. \"focus on revenue trends\") or press Skip.",
-        Markup.inlineKeyboard([Markup.button.callback("⏭ Skip — analyze as-is", "focus_skip")]),
+          "Want to add analysis focus?\n" +
+          'Type a message (e.g. "focus on revenue trends") or press Skip.',
+        Markup.inlineKeyboard([
+          [Markup.button.callback("⏭ Skip — analyze as-is", "focus_skip")],
+          [Markup.button.callback("✖ Cancel", "cancel")],
+        ]),
       );
       return;
     }
 
-    // Skip focus
+    // ── Skip focus ──
     if (data === "focus_skip" && state.step === "awaiting_focus") {
-      await ctx.editMessageText(`Theme: ${state.theme === "dark" ? "🌙 Dark" : "☀️ Light"} | Focus: none`);
+      await ctx.editMessageText(
+        `Theme: ${state.theme === "dark" ? "🌙 Dark" : "☀️ Light"} | Focus: general`,
+      );
       await runAnalysis(ctx, state);
       return;
     }
   });
 
-  // Document handler
+  // ── Document handler ──
+
   bot.on(message("document"), async (ctx) => {
     const state = getState(ctx.from.id);
+
+    // If user sends a new file mid-flow, reset and start over
+    if (state.step !== "idle") {
+      resetState(ctx.from.id);
+    }
+    const freshState = getState(ctx.from.id);
+
     const doc = ctx.message.document;
     const caption = ctx.message.caption || undefined;
 
     const status = await ctx.reply("⏳ Parsing file...");
-    state.statusMessageId = status.message_id;
 
     try {
       const fileLink = await ctx.telegram.getFileLink(doc.file_id);
@@ -136,42 +171,42 @@ export function createBot(): BotInstance {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const parsed = await parseFile({ name: doc.file_name || "file", buffer });
-      state.parsed = parsed;
+      freshState.parsed = parsed;
+
+      if (caption) {
+        freshState.focus = caption;
+      }
 
       // Check if data is too small
       if (parsed.rowCount <= 1 || parsed.preview.trim().length < 10) {
-        state.step = "awaiting_confirm";
+        freshState.step = "awaiting_confirm";
         await ctx.telegram.editMessageText(
           ctx.chat.id,
           status.message_id,
           undefined,
-          `⚠️ This file seems very small (${parsed.rowCount} row(s), ${parsed.preview.trim().length} chars).\n\nAre you sure you want to proceed?`,
-          { reply_markup: Markup.inlineKeyboard([
-            Markup.button.callback("✅ Yes, analyze it", "confirm_yes"),
-            Markup.button.callback("❌ No, I'll resend", "confirm_no"),
-          ]).reply_markup },
+          `⚠️ This file seems very small (${parsed.rowCount} row(s), ${parsed.preview.trim().length} chars).\n\nProceed anyway?`,
+          {
+            reply_markup: Markup.inlineKeyboard([
+              [Markup.button.callback("✅ Yes, analyze it", "confirm_yes"), Markup.button.callback("❌ No", "confirm_no")],
+              [Markup.button.callback("✖ Cancel", "cancel")],
+            ]).reply_markup,
+          },
         );
         return;
       }
 
-      // If caption provided, use it as focus and skip the question
-      if (caption) {
-        state.step = "awaiting_theme";
-        state.parsed = { ...parsed, preview: parsed.preview }; // keep parsed
-        // Store focus in state temporarily
-        (state as any).focus = caption;
-      }
-
-      state.step = "awaiting_theme";
+      freshState.step = "awaiting_theme";
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         status.message_id,
         undefined,
-        `✅ Parsed: ${parsed.name} (${parsed.type}, ~${parsed.rowCount} rows)\n\nChoose a theme for your dashboard:`,
-        { reply_markup: Markup.inlineKeyboard([
-          Markup.button.callback("🌙 Dark", "theme_dark"),
-          Markup.button.callback("☀️ Light", "theme_light"),
-        ]).reply_markup },
+        `✅ Parsed: ${parsed.name} (${parsed.type}, ~${parsed.rowCount} rows)\n\nChoose a theme:`,
+        {
+          reply_markup: Markup.inlineKeyboard([
+            [Markup.button.callback("🌙 Dark", "theme_dark"), Markup.button.callback("☀️ Light", "theme_light")],
+            [Markup.button.callback("✖ Cancel", "cancel")],
+          ]).reply_markup,
+        },
       );
     } catch (err: any) {
       console.error("Error parsing document:", err);
@@ -179,30 +214,38 @@ export function createBot(): BotInstance {
         ctx.chat.id,
         status.message_id,
         undefined,
-        `❌ Error parsing file: ${err.message || "Something went wrong"}`,
+        `❌ Error: ${err.message || "Something went wrong"}`,
       );
-      state.step = "idle";
+      resetState(ctx.from.id);
     }
   });
 
-  // Text handler
+  // ── Text handler ──
+
   bot.on(message("text"), async (ctx) => {
     const text = ctx.message.text;
     if (text.startsWith("/")) return;
 
     const state = getState(ctx.from.id);
 
-    // If awaiting focus, treat this text as focus instruction
+    // If awaiting focus, treat text as focus instruction
     if (state.step === "awaiting_focus") {
-      (state as any).focus = text;
-      await ctx.reply(`Focus: "${text}"`);
+      state.focus = text;
+      await ctx.reply(
+        `Theme: ${state.theme === "dark" ? "🌙 Dark" : "☀️ Light"} | Focus: "${text}"`,
+      );
       await runAnalysis(ctx, state);
       return;
     }
 
-    // Otherwise treat as raw data paste
+    // If mid-flow, reset
+    if (state.step !== "idle") {
+      resetState(ctx.from.id);
+    }
+    const freshState = getState(ctx.from.id);
+
     if (text.length < 10) {
-      await ctx.reply("Send me a data file or paste some data (at least a few rows of CSV, JSON, etc.).");
+      await ctx.reply("Send me a data file or paste some data (at least a few rows).");
       return;
     }
 
@@ -212,39 +255,40 @@ export function createBot(): BotInstance {
       preview: text.slice(0, 4000),
       rowCount: text.trim().split("\n").length,
     };
-
-    state.parsed = parsed;
+    freshState.parsed = parsed;
 
     if (parsed.rowCount <= 1) {
-      state.step = "awaiting_confirm";
+      freshState.step = "awaiting_confirm";
       await ctx.reply(
-        `⚠️ Very little data (${parsed.rowCount} row(s)). Proceed anyway?`,
+        `⚠️ Very little data (${parsed.rowCount} row). Proceed?`,
         Markup.inlineKeyboard([
-          Markup.button.callback("✅ Yes", "confirm_yes"),
-          Markup.button.callback("❌ No", "confirm_no"),
+          [Markup.button.callback("✅ Yes", "confirm_yes"), Markup.button.callback("❌ No", "confirm_no")],
+          [Markup.button.callback("✖ Cancel", "cancel")],
         ]),
       );
       return;
     }
 
-    state.step = "awaiting_theme";
+    freshState.step = "awaiting_theme";
     await ctx.reply(
       `✅ Got ${parsed.rowCount} rows of data.\n\nChoose a theme:`,
       Markup.inlineKeyboard([
-        Markup.button.callback("🌙 Dark", "theme_dark"),
-        Markup.button.callback("☀️ Light", "theme_light"),
+        [Markup.button.callback("🌙 Dark", "theme_dark"), Markup.button.callback("☀️ Light", "theme_light")],
+        [Markup.button.callback("✖ Cancel", "cancel")],
       ]),
     );
   });
 
+  // ── Analysis pipeline ──
+
   async function runAnalysis(ctx: any, state: UserState) {
     const chatId = ctx.chat!.id;
-    const focus = (state as any).focus as string | undefined;
+    const userId = ctx.from!.id;
 
     const status = await ctx.reply("🔍 Analyzing with AI...");
 
     try {
-      const prompt = buildAnalysisPrompt([state.parsed!], focus);
+      const prompt = buildAnalysisPrompt([state.parsed!], state.focus);
       const meta = await analyzeData(prompt);
 
       await ctx.telegram.editMessageText(chatId, status.message_id, undefined, "🎨 Generating dashboard...");
@@ -258,21 +302,32 @@ export function createBot(): BotInstance {
         chatId,
         status.message_id,
         undefined,
-        `✅ Dashboard ready!\n\n📊 ${meta.title}\n${meta.summary}\n\n🔗 ${url}`,
+        `✅ Dashboard ready!\n\n` +
+          `📊 ${meta.title}\n` +
+          `${meta.summary}\n\n` +
+          `🔗 ${url}`,
       );
 
-      // Screenshot and send as photo
+      // Screenshot
       try {
-        await ctx.reply("📸 Taking screenshot...");
+        const screenshotMsg = await ctx.reply("📸 Taking screenshot...");
         const jpg = await screenshotDashboard(html);
+        await ctx.telegram.deleteMessage(chatId, screenshotMsg.message_id).catch(() => {});
         await ctx.replyWithPhoto(
           { source: jpg, filename: "dashboard.jpg" },
-          { caption: `${meta.title}\n${url}` },
+          { caption: `📊 ${meta.title}\n🔗 ${url}` },
         );
       } catch (screenshotErr: any) {
         console.error("Screenshot failed:", screenshotErr);
-        // Non-critical — dashboard link already sent
       }
+
+      // End of session — offer to start new
+      await ctx.reply(
+        "─────────────────────\n✨ Done! Send another file or tap below:",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("📊 New dashboard", "new_dashboard")],
+        ]),
+      );
     } catch (err: any) {
       console.error("Error in analysis:", err);
       await ctx.telegram.editMessageText(
@@ -281,12 +336,14 @@ export function createBot(): BotInstance {
         undefined,
         `❌ Error: ${err.message || "Something went wrong"}`,
       );
+      await ctx.reply(
+        "Something went wrong. Try again:",
+        Markup.inlineKeyboard([
+          [Markup.button.callback("🔄 Start over", "new_dashboard")],
+        ]),
+      );
     } finally {
-      // Reset state
-      state.step = "idle";
-      state.parsed = undefined;
-      state.theme = undefined;
-      (state as any).focus = undefined;
+      resetState(userId);
     }
   }
 
