@@ -1,9 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { initSnapshots, getSnapshot, listSnapshots } from "./snapshots.js";
+import { initSnapshots, getSnapshot, listSnapshots, createSnapshot } from "./snapshots.js";
 import { createBot } from "./bot.js";
 import { handleMcpPost, handleMcpSse } from "./mcp.js";
+import { buildAnalysisPrompt, type ParsedFile } from "./file-parser.js";
+import { analyzeData } from "./analyzer.js";
+import { generateDashboard } from "./html-generator.js";
 
 const PORT = Number(process.env.PORT || 3001);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
@@ -35,6 +38,32 @@ app.get("/s/:slug", (req, res) => {
 
 app.get("/api/snapshots", (_req, res) => {
   res.json(listSnapshots());
+});
+
+// API for remote dashboard creation (called by Alpic MCP tool)
+app.post("/api/analyze", async (req, res) => {
+  const { data, focus } = req.body || {};
+  if (!data || typeof data !== "string") {
+    res.status(400).json({ error: "Missing required field: data" });
+    return;
+  }
+  try {
+    const parsed: ParsedFile = {
+      name: "input_data.txt",
+      type: "text",
+      preview: data.slice(0, 4000),
+      rowCount: data.trim().split("\n").length,
+    };
+    const prompt = buildAnalysisPrompt([parsed], focus);
+    const meta = await analyzeData(prompt);
+    const html = generateDashboard(meta);
+    const { slug } = createSnapshot(meta.title, html);
+    const url = `${BASE_URL}/s/${slug}`;
+
+    res.json({ url, title: meta.title, summary: meta.summary });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Analysis failed" });
+  }
 });
 
 app.get("/", (_req, res) => {
