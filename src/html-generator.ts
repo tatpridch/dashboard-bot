@@ -51,8 +51,8 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
     .append("g").attr("transform", \`translate(\${margin.left},\${margin.top})\`);
 
   const labels = data.map(d => String(d[f.x] ?? ''));
-  const values = data.map(d => Number(d[f.y] ?? 0));
-  const maxVal = d3.max(values) || 0;
+  const values = data.map(d => { const v = Number(d[f.y]); return isNaN(v) ? 0 : v; });
+  const maxVal = Math.max(0, ...values) || 1;
 
   ${horizontal ? `
   const yScale = d3.scaleBand().domain(labels).range([0, height]).padding(0.3);
@@ -76,7 +76,7 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
   bars.transition().duration(600).delay((_,i) => i * 50)
     .attr("width", (_,i) => xScale(values[i]));
   ` : `
-  const xScale = d3.scaleBand().domain(labels).range([0, width]).padding(0.3);
+  const xScale = d3.scaleBand().domain(labels).range([0, width]).padding(0.2);
   const yScale = d3.scaleLinear().domain([0, maxVal * 1.1]).range([height, 0]);
   svg.append("g").attr("transform", \`translate(0,\${height})\`)
     .call(d3.axisBottom(xScale).tickSize(0))
@@ -120,7 +120,7 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
     .append("g").attr("transform", \`translate(\${margin.left},\${margin.top})\`);
 
   const dates = data.map(d => new Date(String(d[f.x])));
-  const values = data.map(d => Number(d[f.y] ?? 0));
+  const values = data.map(d => { const v = Number(d[f.y]); return isNaN(v) ? 0 : v; });
 
   const xScale = d3.scaleTime().domain(d3.extent(dates)).range([0, width]);
   const yScale = d3.scaleLinear().domain([0, (d3.max(values) || 0) * 1.1]).range([height, 0]);
@@ -191,7 +191,7 @@ function generateDonutScript(id: string, data: string, x: string, y: string): st
     .attr("preserveAspectRatio", "xMidYMid meet")
     .append("g").attr("transform", \`translate(\${radius},\${radius})\`);
 
-  const values = data.map(d => Math.abs(Number(d[f.y] ?? 0)));
+  const values = data.map(d => { const v = Number(d[f.y]); return isNaN(v) ? 0 : Math.abs(v); });
   const labels = data.map(d => String(d[f.x] ?? ''));
   const total = d3.sum(values);
 
@@ -730,9 +730,18 @@ window.resolveFields = function(data, xField, yField) {
   const hasY = keys.includes(yField);
   if (hasX && hasY) return { x: xField, y: yField };
 
-  // Try to find numeric and string fields
-  const numericKeys = keys.filter(k => data.some(d => typeof d[k] === 'number' || (!isNaN(Number(d[k])) && d[k] !== '' && d[k] !== null)));
-  const stringKeys = keys.filter(k => !numericKeys.includes(k));
+  // Score each key: how many rows have a parseable number for that key
+  const numScore = {};
+  keys.forEach(k => {
+    numScore[k] = data.reduce((n, d) => {
+      const v = d[k];
+      return n + (v !== null && v !== '' && !isNaN(Number(v)) ? 1 : 0);
+    }, 0);
+  });
+  // A key is "numeric" if >50% of rows parse as numbers
+  const half = data.length / 2;
+  const numericKeys = keys.filter(k => numScore[k] > half);
+  const stringKeys = keys.filter(k => numScore[k] <= half);
 
   const resolvedX = hasX ? xField : (stringKeys[0] || keys[0]);
   const resolvedY = hasY ? yField : (numericKeys[0] || keys[1] || keys[0]);
