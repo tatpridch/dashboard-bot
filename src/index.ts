@@ -80,9 +80,28 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   if (WEBHOOK_MODE) {
     app.use(webhookPath, bot.webhookCallback("/"));
 
-    app.listen(PORT, async () => {
+    app.listen(PORT, () => {
       console.log(`Express server running on port ${PORT} (webhook mode)`);
-      await setupWebhook(BASE_URL);
+      console.log(`Setting webhook to ${BASE_URL}${webhookPath}...`);
+
+      // Retry webhook setup — Railway may not be ready to accept traffic immediately
+      const attemptWebhook = async (attempt: number) => {
+        try {
+          await setupWebhook(BASE_URL);
+          console.log("Webhook set successfully!");
+        } catch (err) {
+          console.error(`Webhook setup failed (attempt ${attempt}):`, err);
+          if (attempt < 3) {
+            const delay = attempt * 3000;
+            console.log(`Retrying in ${delay}ms...`);
+            setTimeout(() => attemptWebhook(attempt + 1), delay);
+          } else {
+            console.error("Webhook setup failed after 3 attempts. Bot will not receive messages!");
+          }
+        }
+      };
+      // Small delay so Railway's proxy/load balancer is ready
+      setTimeout(() => attemptWebhook(1), 2000);
     });
   } else {
     app.listen(PORT, () => {
