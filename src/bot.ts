@@ -7,11 +7,27 @@ import { createSnapshot } from "./snapshots.js";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3001";
 
-export function createBot(): Telegraf {
+export interface BotInstance {
+  bot: Telegraf;
+  webhookPath: string;
+  setupWebhook: (baseUrl: string) => Promise<void>;
+}
+
+export function createBot(): BotInstance {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
   const bot = new Telegraf(token);
+
+  // Webhook secret derived from bot token ID (deterministic, no extra env var needed)
+  const webhookSecret = token.split(":")[0];
+  const webhookPath = `/webhook/${webhookSecret}`;
+
+  async function setupWebhook(baseUrl: string) {
+    const url = `${baseUrl}${webhookPath}`;
+    await bot.telegram.setWebhook(url);
+    console.log(`Webhook set to ${url}`);
+  }
 
   bot.start((ctx) => {
     ctx.reply(
@@ -131,5 +147,5 @@ export function createBot(): Telegraf {
     }
   });
 
-  return bot;
+  return { bot, webhookPath, setupWebhook };
 }
