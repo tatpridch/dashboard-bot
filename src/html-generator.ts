@@ -56,12 +56,12 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
   const yScale = d3.scaleBand().domain(labels).range([0, height]).padding(0.3);
   const xScale = d3.scaleLinear().domain([0, maxVal * 1.1]).range([0, width]);
   svg.append("g").call(d3.axisLeft(yScale).tickSize(0))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","11px");
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","11px");
   svg.append("g").attr("transform", \`translate(0,\${height})\`)
     .call(d3.axisBottom(xScale).ticks(5))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","10px");
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
   svg.selectAll(".bar").data(data).join("rect")
     .attr("y", (_,i) => yScale(labels[i]) ?? 0)
     .attr("height", yScale.bandwidth()).attr("x", 0)
@@ -74,13 +74,13 @@ function generateBarScript(id: string, data: string, x: string, y: string, horiz
   const yScale = d3.scaleLinear().domain([0, maxVal * 1.1]).range([height, 0]);
   svg.append("g").attr("transform", \`translate(0,\${height})\`)
     .call(d3.axisBottom(xScale).tickSize(0))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","10px")
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px")
     .attr("transform", labels.length > 6 ? "rotate(-30)" : "")
     .style("text-anchor", labels.length > 6 ? "end" : "middle");
   svg.append("g").call(d3.axisLeft(yScale).ticks(5))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","10px");
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
   svg.selectAll(".bar").data(data).join("rect")
     .attr("x", (_,i) => xScale(labels[i]) ?? 0)
     .attr("width", xScale.bandwidth()).attr("y", height).attr("height", 0)
@@ -115,11 +115,11 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
 
   svg.append("g").attr("transform", \`translate(0,\${height})\`)
     .call(d3.axisBottom(xScale).ticks(5))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","10px");
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
   svg.append("g").call(d3.axisLeft(yScale).ticks(5))
-    .call(g => g.select(".domain").attr("stroke","#555"))
-    .selectAll("text").attr("fill","#aaa").attr("font-size","10px");
+    .call(g => g.select(".domain").attr("stroke","var(--chart-domain)"))
+    .selectAll("text").attr("fill","var(--chart-text)").attr("font-size","10px");
 
   const area = d3.area().x((_,i) => xScale(dates[i])).y0(height).y1((_,i) => yScale(values[i])).curve(d3.curveMonotoneX);
   svg.append("path").datum(d3.range(data.length)).attr("fill","rgba(96,165,250,0.1)").attr("d", area);
@@ -135,7 +135,7 @@ function generateTimelineScript(id: string, data: string, x: string, y: string):
   svg.selectAll(".dot").data(data).join("circle")
     .attr("cx", (_,i) => xScale(dates[i]))
     .attr("cy", (_,i) => yScale(values[i]))
-    .attr("r", 3.5).attr("fill", lineColor).attr("stroke","#1a1a2e").attr("stroke-width",2)
+    .attr("r", 3.5).attr("fill", lineColor).attr("stroke","var(--donut-stroke)").attr("stroke-width",2)
     .attr("opacity", 0).transition().delay(1000).duration(300).attr("opacity", 0.8);
 })();`;
 }
@@ -164,7 +164,7 @@ function generateDonutScript(id: string, data: string, x: string, y: string): st
 
   svg.selectAll(".arc").data(pie(values)).join("path")
     .attr("fill", (_,i) => colors[i % colors.length])
-    .attr("opacity", 0.85).attr("stroke","#1a1a2e").attr("stroke-width",2)
+    .attr("opacity", 0.85).attr("stroke","var(--donut-stroke)").attr("stroke-width",2)
     .transition().duration(800)
     .attrTween("d", function(d) {
       const interp = d3.interpolate({startAngle:0, endAngle:0}, d);
@@ -230,7 +230,9 @@ function generateTableHtml(dataset: Dataset): string {
     </div>`;
 }
 
-export function generateDashboard(meta: AnalysisMeta): string {
+export type Theme = "dark" | "light";
+
+export function generateDashboard(meta: AnalysisMeta, theme: Theme = "dark"): string {
   const scripts: string[] = [];
 
   const chartsHtml = meta.datasets
@@ -269,12 +271,28 @@ export function generateDashboard(meta: AnalysisMeta): string {
 <title>${escapeHtml(meta.title)}</title>
 <script src="https://d3js.org/d3.v7.min.js"><\/script>
 <style>
+:root {
+  --bg: ${theme === "dark" ? "#0f0f1a" : "#f5f5f7"};
+  --text: ${theme === "dark" ? "#e5e5e5" : "#1a1a2e"};
+  --text-muted: ${theme === "dark" ? "#aaa" : "#666"};
+  --text-subtle: ${theme === "dark" ? "#888" : "#999"};
+  --card-bg: ${theme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"};
+  --card-border: ${theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)"};
+  --hero-grad: ${theme === "dark" ? "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12))" : "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))"};
+  --metric-value: ${theme === "dark" ? "#fff" : "#1a1a2e"};
+  --chart-text: ${theme === "dark" ? "#aaa" : "#666"};
+  --chart-domain: ${theme === "dark" ? "#555" : "#ccc"};
+  --table-header-bg: ${theme === "dark" ? "#1a1a2e" : "#eee"};
+  --table-hover: ${theme === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"};
+  --deeper-border: ${theme === "dark" ? "#60a5fa" : "#3b82f6"};
+  --donut-stroke: ${theme === "dark" ? "#1a1a2e" : "#f5f5f7"};
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #0f0f1a;
-  color: #e5e5e5;
+  background: var(--bg);
+  color: var(--text);
   min-height: 100vh;
 }
 .db-wrap {
@@ -286,8 +304,8 @@ body {
 .db-hero {
   margin-bottom: 32px;
   padding: 32px;
-  background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.12));
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--hero-grad);
+  border: 1px solid var(--card-border);
   border-radius: 16px;
 }
 .db-hero-header {
@@ -319,7 +337,7 @@ body {
 .db-summary {
   font-size: 15px;
   line-height: 1.6;
-  color: #aaa;
+  color: var(--text-muted);
   max-width: 700px;
 }
 /* Metrics */
@@ -330,8 +348,8 @@ body {
   margin-bottom: 32px;
 }
 .db-metric {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 20px;
   text-align: center;
@@ -339,18 +357,18 @@ body {
 .db-metric-value {
   font-size: 28px;
   font-weight: 800;
-  color: #fff;
+  color: var(--metric-value);
   margin-bottom: 4px;
 }
 .db-metric-unit {
   font-size: 16px;
   font-weight: 600;
-  color: #888;
+  color: var(--text-subtle);
   margin: 0 2px;
 }
 .db-metric-label {
   font-size: 12px;
-  color: #888;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -371,8 +389,8 @@ body {
   margin-bottom: 32px;
 }
 .db-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 20px;
   overflow: hidden;
@@ -380,7 +398,7 @@ body {
 .db-card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #ccc;
+  color: var(--text-muted);
   margin-bottom: 16px;
 }
 .db-chart-container {
@@ -401,35 +419,35 @@ body {
 .db-table th {
   position: sticky;
   top: 0;
-  background: #1a1a2e;
-  color: #888;
+  background: var(--table-header-bg);
+  color: var(--text-subtle);
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.5px;
   font-weight: 600;
   padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--card-border);
 }
 .db-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  color: #ccc;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--text-muted);
 }
 .db-table tr:hover td {
-  background: rgba(255,255,255,0.02);
+  background: var(--table-hover);
 }
 /* Dig Deeper */
 .db-deeper {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 24px;
 }
 .db-deeper h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #888;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -442,18 +460,18 @@ body {
 }
 .db-deeper li {
   font-size: 14px;
-  color: #aaa;
+  color: var(--text-muted);
   padding: 8px 12px;
-  background: rgba(255,255,255,0.03);
+  background: var(--card-bg);
   border-radius: 8px;
-  border-left: 3px solid #60a5fa;
+  border-left: 3px solid var(--deeper-border);
 }
 /* Footer */
 .db-footer {
   text-align: center;
   margin-top: 32px;
   font-size: 11px;
-  color: #555;
+  color: var(--text-subtle);
 }
 @media (max-width: 600px) {
   .db-wrap { padding: 16px; }
