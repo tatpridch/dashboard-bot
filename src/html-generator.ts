@@ -283,10 +283,57 @@ function generateTableHtml(dataset: Dataset): string {
     </div>`;
 }
 
+// Domain-themed decorative SVGs (~2-5KB each, inline)
+function getDomainDecorations(domain: string, theme: "dark" | "light"): { left: string; right: string } {
+  const opacity = theme === "dark" ? "0.06" : "0.04";
+  const stroke = theme === "dark" ? "#60a5fa" : "#3b82f6";
+  const d = domain.toLowerCase();
+
+  // Finance / Money
+  if (d.includes("financ") || d.includes("revenue") || d.includes("sales") || d.includes("money") || d.includes("budget")) {
+    return {
+      left: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="40" r="30" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="2"/><path d="M40 20v40M30 28h20M30 52h20" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/><path d="M33 36c0-4 3-7 7-7s7 3 7 7-3 5-7 5-7 3-7 7 3 7 7 7 7-3 7-7" stroke="${stroke}" stroke-opacity="0.15" stroke-width="2" fill="none"/></svg>`,
+      right: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 60L30 40L45 50L65 20" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/><circle cx="30" cy="40" r="3" fill="${stroke}" fill-opacity="0.1"/><circle cx="45" cy="50" r="3" fill="${stroke}" fill-opacity="0.1"/><circle cx="65" cy="20" r="3" fill="${stroke}" fill-opacity="0.15"/></svg>`,
+    };
+  }
+
+  // Tech / Engineering
+  if (d.includes("tech") || d.includes("engineer") || d.includes("software") || d.includes("it") || d.includes("dev")) {
+    return {
+      left: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="15" y="20" width="50" height="35" rx="4" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2"/><path d="M30 60h20M40 55v5" stroke="${stroke}" stroke-opacity="0.1" stroke-width="2" stroke-linecap="round"/><path d="M30 35l-5 5 5 5M50 35l5 5-5 5" stroke="${stroke}" stroke-opacity="0.15" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M38 32l4 16" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/></svg>`,
+      right: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="25" cy="25" r="6" stroke="${stroke}" stroke-opacity="0.1" stroke-width="1.5"/><circle cx="55" cy="25" r="6" stroke="${stroke}" stroke-opacity="0.1" stroke-width="1.5"/><circle cx="40" cy="55" r="6" stroke="${stroke}" stroke-opacity="0.1" stroke-width="1.5"/><path d="M30 28l15 24M50 28L35 52M25 25h30" stroke="${stroke}" stroke-opacity="0.08" stroke-width="1.5"/></svg>`,
+    };
+  }
+
+  // Health / Medical
+  if (d.includes("health") || d.includes("medical") || d.includes("patient") || d.includes("pharma")) {
+    return {
+      left: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M40 25c-8-12-25-5-25 8 0 18 25 27 25 27s25-9 25-27c0-13-17-20-25-8z" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2" fill="none"/></svg>`,
+      right: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 40h12l5-15 8 30 6-20 5 10h14" stroke="${stroke}" stroke-opacity="0.15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`,
+    };
+  }
+
+  // HR / People
+  if (d.includes("hr") || d.includes("people") || d.includes("employee") || d.includes("team") || d.includes("human")) {
+    return {
+      left: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="28" r="10" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2"/><path d="M22 62c0-10 8-18 18-18s18 8 18 18" stroke="${stroke}" stroke-opacity="0.1" stroke-width="2" fill="none"/></svg>`,
+      right: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="25" cy="30" r="7" stroke="${stroke}" stroke-opacity="0.08" stroke-width="1.5"/><circle cx="55" cy="30" r="7" stroke="${stroke}" stroke-opacity="0.08" stroke-width="1.5"/><circle cx="40" cy="25" r="8" stroke="${stroke}" stroke-opacity="0.12" stroke-width="2"/><path d="M15 58c0-8 5-14 10-14M65 58c0-8-5-14-10-14M25 60c0-9 7-16 15-16s15 7 15 16" stroke="${stroke}" stroke-opacity="0.08" stroke-width="1.5" fill="none"/></svg>`,
+    };
+  }
+
+  // Default / Generic — abstract data pattern
+  return {
+    left: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="12" y="45" width="10" height="20" rx="2" fill="${stroke}" fill-opacity="0.06"/><rect x="27" y="30" width="10" height="35" rx="2" fill="${stroke}" fill-opacity="0.08"/><rect x="42" y="38" width="10" height="27" rx="2" fill="${stroke}" fill-opacity="0.06"/><rect x="57" y="22" width="10" height="43" rx="2" fill="${stroke}" fill-opacity="0.1"/></svg>`,
+    right: `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="55" r="12" stroke="${stroke}" stroke-opacity="0.08" stroke-width="1.5" fill="none"/><circle cx="20" cy="55" r="6" fill="${stroke}" fill-opacity="0.04"/><circle cx="55" cy="35" r="16" stroke="${stroke}" stroke-opacity="0.06" stroke-width="1.5" fill="none"/><circle cx="55" cy="35" r="9" fill="${stroke}" fill-opacity="0.04"/></svg>`,
+  };
+}
+
 export type Theme = "dark" | "light";
 
 export function generateDashboard(meta: AnalysisMeta, theme: Theme = "dark"): string {
   const scripts: string[] = [];
+  const decos = getDomainDecorations(meta.domain, theme);
+  const emoji = meta.emoji || "";
 
   const chartsHtml = meta.datasets
     .map((ds, i) => {
@@ -362,7 +409,19 @@ body {
   background: var(--hero-grad);
   border: 1px solid var(--card-border);
   border-radius: 16px;
+  position: relative;
+  overflow: hidden;
 }
+.db-hero-deco {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.db-hero-deco.left { left: 16px; }
+.db-hero-deco.right { right: 16px; }
+.db-hero-content { position: relative; z-index: 1; }
 .db-hero-header {
   display: flex;
   align-items: center;
@@ -576,6 +635,7 @@ body {
   .db-wrap { padding: 16px; }
   .db-hero { padding: 20px; }
   .db-hero-title { font-size: 22px; }
+  .db-hero-deco { display: none; }
   .db-charts { grid-template-columns: 1fr; }
   .db-metrics { grid-template-columns: repeat(2, 1fr); }
 }
@@ -584,11 +644,15 @@ body {
 <body>
 <div class="db-wrap">
   <div class="db-hero">
-    <div class="db-hero-header">
-      <h1 class="db-hero-title">${escapeHtml(meta.title)}</h1>
-      <span class="db-badge">${escapeHtml(meta.domain)}</span>
+    <div class="db-hero-deco left">${decos.left}</div>
+    <div class="db-hero-deco right">${decos.right}</div>
+    <div class="db-hero-content">
+      <div class="db-hero-header">
+        <h1 class="db-hero-title">${escapeHtml(meta.title)}</h1>
+        <span class="db-badge">${emoji ? emoji + " " : ""}${escapeHtml(meta.domain)}</span>
+      </div>
+      <p class="db-summary">${escapeHtml(meta.summary)}</p>
     </div>
-    <p class="db-summary">${escapeHtml(meta.summary)}</p>
   </div>
 
   <div class="db-metrics">${metricsHtml}</div>

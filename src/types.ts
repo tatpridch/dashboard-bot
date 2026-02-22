@@ -26,6 +26,7 @@ export interface AnalysisMeta {
   title: string;
   domain: string;
   summary: string;
+  emoji: string;
   metrics: Metric[];
   datasets: Dataset[];
   segments: string[];
